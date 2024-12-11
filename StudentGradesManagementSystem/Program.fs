@@ -1,5 +1,7 @@
 ﻿open System
 open System.Windows.Forms
+open System.IO
+open System.Text.RegularExpressions
 
 type Class = {
     ClassId: int
@@ -17,52 +19,160 @@ type Grade = {
     StudentGrade: int
 }
 
-let class_pl3 :Class = { ClassId = 1; ClassName = "pl3" }
-let student_anas :Student = { StudentName = "anas"; StudentId = 15 }
-let pl3_anas_grade :Grade = { ClassId = 1; StudentId = 15; StudentGrade = 90 }
+let studentRelativePath  = @"..\..\..\data\student.txt"
+let studentFullPath = Path.Combine(Directory.GetCurrentDirectory(), studentRelativePath)
+
+let pattern = @"ID: (\d+), NAME: (.+)"
+
+//crud
+let appendLineAutoIdToFile filePath content =
+    try
+        let lines = if File.Exists(filePath) then File.ReadAllLines(filePath) |> Array.toList else []
+        let nextID =
+            match lines |> List.tryLast with
+            | Some lastLine when lastLine.StartsWith("ID:") -> 
+                let matched = Regex.Match(lastLine, pattern)
+                (int matched.Groups.[1].Value) + 1 //next id
+            | _ -> 1
+        let fullContent = $"ID: {nextID}, NAME: {content}\r\n"
+        File.AppendAllText(filePath, fullContent)
+        Ok("File written successfully")
+    with
+    | :? IOException as ex -> Error($"IO error to {filePath}: {ex.Message}") 
+    | ex -> Error($"Unexpected error: {ex.Message}")
+
+let readFileLines filePath =
+    try
+        let lines = File.ReadLines(filePath)
+        Ok(lines)
+    with
+    | :? FileNotFoundException as ex ->  Error($"{ex.Message}")
+    | ex -> Error($"{ex.Message}")
 
 
-printfn $"n={student_anas.StudentName}"
 
-//Class
-//classId className
-//  1           pl3
-//  2           os
-//  3           ai
+let systemTitle = new Label(Text = "Student Grades Management System", Top = 10 , Left = 300, Width = 500)
 
-//Student
-//studentId   studentName
-//  1             anas
-//  2             samy
+///////////////////////////////###########
+///////////////////////////////###########
+
+let rec createMainForm () =
+    let mainForm = new Form(Text = "Student Grades Management System", Width = 800, Height = 600)
+
+    let manageStudentButton = new Button(Text = "Manage Student", Top = 200, Left = 50, Width = 200)
+    let manageCourseButton = new Button(Text = "Manage Course", Top = 200, Left = 300, Width = 200)
+    let manageGreadesButton = new Button(Text = "Manage Greades", Top = 200, Left = 550, Width = 200)
+
+    // Event to open the child form
+    manageStudentButton.Click.Add(fun _ ->
+        let childForm:Form = createManageStudentChildForm mainForm
+        mainForm.Hide() // Hide the main form
+        childForm.ShowDialog() |> ignore // Show the child form as a modal dialog
+        mainForm.Show() // Show the main form again when the child form is closed
+    )
+
+    manageCourseButton.Click.Add(fun _ ->
+        let childForm:Form = createManageCourseChildForm mainForm
+        mainForm.Hide() // Hide the main form
+        childForm.ShowDialog() |> ignore // Show the child form as a modal dialog
+        mainForm.Show() // Show the main form again when the child form is closed
+    )
+
+    manageGreadesButton.Click.Add(fun _ ->
+        let childForm:Form = createManageGradesChildForm mainForm
+        mainForm.Hide() // Hide the main form
+        childForm.ShowDialog() |> ignore // Show the child form as a modal dialog
+        mainForm.Show() // Show the main form again when the child form is closed
+    )
+
+    // Add components to the main form
+    mainForm.Controls.AddRange[| systemTitle; manageStudentButton; manageCourseButton; manageGreadesButton |]
+    mainForm
+
+// Create the child form
+and createManageStudentChildForm (mainForm: Form) =
+    let childForm = new Form(Text = "Student Grades Management System", Width = 800, Height = 600)
+
+    let backButton = new Button(Text = "Back to Main Form", Top = 50, Left = 50, Width = 200)
+
+    let manageStudentTitle = new Label(Text = "Manage Student", Top = 10 , Left = 300, Width = 500)
+
+    let studentNameInput = new TextBox(Top = 100, Left = 150, Width = 200)
+    //let studentIdInput = new TextBox(Top = 140, Left = 150, Width = 200)
+
+    let studentNameLabel = new Label(Text = "Student Name:", Top = 100, Left = 50)
+    //let studentIdLabel = new Label(Text = "Student ID:", Top = 140, Left = 50)
+
+    let addStudentButton = new Button(Text = "Add New Student", Top = 200, Left = 50, Width = 100)
+    let editStudentButton = new Button(Text = "Edit Student", Top = 200, Left = 200, Width = 100)//not finish
+    let deleteStudentButton = new Button(Text = "Delete Student", Top = 200, Left = 350, Width = 100)//not finish
+
+    // Event to return to the main form
+    backButton.Click.Add(fun _ ->
+        childForm.Close() // Close the child form
+    )
+    addStudentButton.Click.Add (fun _ ->
+    
+        let studentName = studentNameInput.Text
+         
+        //let student = { StudentId = studentId; StudentName = studentName }
+
+        try
+            
+            
+        // Ensure the folder exists
+            let folderPath = Path.GetDirectoryName(studentFullPath)
+            if not (Directory.Exists(folderPath)) then
+                Directory.CreateDirectory(folderPath) |> ignore
+
+            match appendLineAutoIdToFile studentFullPath studentName with
+            | Ok msg -> MessageBox.Show($"Success: {msg}")  |> ignore
+            | Error err -> MessageBox.Show($"Error: {err}") |> ignore
+
+        with
+        | ex -> MessageBox.Show($"An error occurred: {ex.Message}") |> ignore
+        //outputBox.Text <- "Student added successfully!"
+    )
+
+    // Add components to the child form
+    childForm.Controls.AddRange[| manageStudentTitle; backButton; studentNameLabel; studentNameInput;
+                                  addStudentButton; editStudentButton; deleteStudentButton |]
+    childForm
+
+and createManageCourseChildForm (mainForm: Form) =
+    let childForm = new Form(Text = "Student Grades Management System", Width = 800, Height = 600)
+
+    let backButton = new Button(Text = "Back to Main Form", Top = 50, Left = 50, Width = 200)
+    let manageCourseTitle = new Label(Text = "Manage Course", Top = 10 , Left = 300, Width = 500)
+    // Event to return to the main form
+    backButton.Click.Add(fun _ ->
+        childForm.Close() // Close the child form
+    )
+
+    // Add components to the child form
+    childForm.Controls.AddRange[| manageCourseTitle; backButton |]
+    childForm
+
+and createManageGradesChildForm (mainForm: Form) =
+    let childForm = new Form(Text = "Student Grades Management System", Width = 800, Height = 600)
+
+    let backButton = new Button(Text = "Back to Main Form", Top = 50, Left = 50, Width = 200)
+    let manageGreadesTitle = new Label(Text = "Manage Greades", Top = 10 , Left = 300, Width = 500)
+    // Event to return to the main form
+    backButton.Click.Add(fun _ ->
+        childForm.Close() // Close the child form
+    )
+
+    // Add components to the child form
+    childForm.Controls.AddRange[| manageGreadesTitle; backButton |]
+    childForm
+
+///////////////////////////////###########
+///////////////////////////////###########
 
 
-//grade
-//classId    studentId   studentGrade
-//  1             2           90
-//  1             1           85
-//  2             1           75
-//  2             2           87
-//  3             1           99  
-
-
-// Create a new form
-//let createForm () =
-//    let form = new Form(Text = "Hello, F# Windows Forms!", Width = 400, Height = 300)
-
-//    // Create a button
-//    let button = new Button(Text = "Click Me!", Dock = DockStyle.Fill)
-
-//    // Button click event handler
-//    button.Click.Add(fun _ -> MessageBox.Show("Hello, World!") |> ignore)
-
-//    // Add the button to the form
-//    form.Controls.Add(button)
-
-//    form
-
-//[<EntryPoint>]
-//let main argv =
-//    // Create and run the form
-//    Application.EnableVisualStyles()
-//    Application.Run(createForm())
-//    0
+// Run the application with child
+[<STAThread>]
+do
+    let mainForm = createMainForm ()
+    Application.Run(mainForm)
