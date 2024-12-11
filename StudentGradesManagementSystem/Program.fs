@@ -44,25 +44,27 @@ printfn $"n={student_anas.StudentName}"
 //  2             2           87
 //  3             1           99  
 
+let mainForm =
+    let form = new Form(Text = "Student Grades Management", Width = 600, Height = 400)
+    
+    let addButton = new Button(Text = "Add Student", Dock = DockStyle.Top)
+    addButton.Click.Add(fun _ -> 
+        // Open Add Student form 
+        MessageBox.Show("Student Added!") |> ignore
+        )
 
-// Create a new form
-//let createForm () =
-//    let form = new Form(Text = "Hello, F# Windows Forms!", Width = 400, Height = 300)
+    let viewButton = new Button(Text = "View Statistics", Dock = DockStyle.Top)
+    viewButton.Click.Add(fun _ -> 
+        // Show statistics in a message box
+        MessageBox.Show("Statistics viewed") |> ignore
+    )
 
-//    // Create a button
-//    let button = new Button(Text = "Click Me!", Dock = DockStyle.Fill)
+    form.Controls.Add(viewButton)
+    form.Controls.Add(addButton)
+    form
 
-//    // Button click event handler
-//    button.Click.Add(fun _ -> MessageBox.Show("Hello, World!") |> ignore)
-
-//    // Add the button to the form
-//    form.Controls.Add(button)
-
-//    form
-
-//[<EntryPoint>]
-//let main argv =
-//    // Create and run the form
-//    Application.EnableVisualStyles()
-//    Application.Run(createForm())
-//    0
+[<EntryPoint>]
+let main argv =
+   Application.EnableVisualStyles()
+   Application.Run(mainForm)
+   0
