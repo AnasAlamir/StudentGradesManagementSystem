@@ -11,12 +11,21 @@ type Class = {
 type Student = {
     StudentId: int
     StudentName: string
+    Grades: int list
 }
 
 type Grade = {
     ClassId: int
     StudentId: int
     StudentGrade: int
+}
+
+type Statistics = {
+    Average: int
+    PassRate: float
+    FailRate: float
+    HighestGrade: int
+    LowestGrade: int
 }
 
 let studentRelativePath  = @"..\..\..\data\student.txt"
@@ -157,11 +166,53 @@ and createManageGradesChildForm (mainForm: Form) =
     let childForm = new Form(Text = "Student Grades Management System", Width = 800, Height = 600)
 
     let backButton = new Button(Text = "Back to Main Form", Top = 50, Left = 50, Width = 200)
+    
+    let manageGradesTitle = new Label(Text = "Manage Grades", Top = 10 , Left = 300, Width = 500)
+    let viewStats = new Button(Text = "View Statistics", Top = 200, Left = 50, Width = 100)
     let manageGreadesTitle = new Label(Text = "Manage Greades", Top = 10 , Left = 300, Width = 500)
     // Event to return to the main form
     backButton.Click.Add(fun _ ->
         childForm.Close() // Close the child form
     )
+    
+    let calculateAverage (grades: int list) =
+        if grades.Length > 0 then List.sum grades / grades.Length else 0
+    
+    let students = [
+        { StudentId = 1; StudentName = "John Doe"; Grades = [85; 90; 78] }
+        { StudentId = 2; StudentName = "Jane Smith"; Grades = [92; 88; 79] }
+        { StudentId = 3; StudentName = "Sam Brown"; Grades = [70; 65; 80] }
+    ]
+    
+    let classStatistics () : Statistics =
+        let allGrades = students |> List.collect (fun s -> s.Grades)
+        let passCount = allGrades |> List.filter (fun g -> g >= 50) |> List.length
+        let failCount = allGrades.Length - passCount
+        let highest = if allGrades.Length > 0 then List.max allGrades else 0
+        let lowest = if allGrades.Length > 0 then List.min allGrades else 0
+    
+        {
+            Average = calculateAverage allGrades
+            PassRate = float passCount / float allGrades.Length * 100.0
+            FailRate = float failCount / float allGrades.Length * 100.0
+            HighestGrade = highest
+            LowestGrade = lowest
+        }
+
+    viewStats.Click.Add(fun _ ->
+        let stats = classStatistics ()
+        let message = 
+            $"Average: {stats.Average}\n" +
+            $"Pass Rate: {stats.PassRate:F2}%%\n" +
+            $"Fail Rate: {stats.FailRate:F2}%%\n" +
+            $"Highest Grade: {stats.HighestGrade}\n" +
+            $"Lowest Grade: {stats.LowestGrade}"
+        MessageBox.Show(message) |> ignore
+        )
+
+
+    // Add components to the child form
+    childForm.Controls.AddRange[| manageGradesTitle; backButton; viewStats |]
 
     // Add components to the child form
     childForm.Controls.AddRange[| manageGreadesTitle; backButton |]
