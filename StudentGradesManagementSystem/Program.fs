@@ -166,8 +166,10 @@ and createManageGradesChildForm (mainForm: Form) =
     let childForm = new Form(Text = "Student Grades Management System", Width = 800, Height = 600)
 
     let backButton = new Button(Text = "Back to Main Form", Top = 50, Left = 50, Width = 200)
+    
     let manageGradesTitle = new Label(Text = "Manage Grades", Top = 10 , Left = 300, Width = 500)
     let viewStats = new Button(Text = "View Statistics", Top = 200, Left = 50, Width = 100)
+    let manageGreadesTitle = new Label(Text = "Manage Greades", Top = 10 , Left = 300, Width = 500)
     // Event to return to the main form
     backButton.Click.Add(fun _ ->
         childForm.Close() // Close the child form
@@ -211,6 +213,9 @@ and createManageGradesChildForm (mainForm: Form) =
 
     // Add components to the child form
     childForm.Controls.AddRange[| manageGradesTitle; backButton; viewStats |]
+
+    // Add components to the child form
+    childForm.Controls.AddRange[| manageGreadesTitle; backButton |]
     childForm
 
 ///////////////////////////////###########
