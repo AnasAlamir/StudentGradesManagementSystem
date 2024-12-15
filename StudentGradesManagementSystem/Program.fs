@@ -1,4 +1,4 @@
-open System
+﻿open System
 open System.Windows.Forms
 open System.IO
 open System.Text.RegularExpressions
@@ -133,7 +133,7 @@ let rec createMainForm (role: UserRole) =
     let studentIdLabel = new Label(Text = "Student ID:", Top = 240, Left = 50)
 
     let searchButton = new Button(Text = "Veiw Grades", Top = 240, Left = 400, Width = 200)
-
+    let viewStats = new Button(Text = "View Statistics", Top = 240, Left = 650, Width = 100)
     // Output area
     let outputBox = new TextBox(Top = 300, Left = 50, Width = 300, Height = 200, Multiline = true, ReadOnly = true)
 
@@ -159,6 +159,19 @@ let rec createMainForm (role: UserRole) =
         outputBox.Text <- outputData
         mainForm.Controls.Add(outputBox)
     )
+    viewStats.Click.Add(fun _ ->
+        let students = [
+            {StudentId = 1; StudentName = "Alice"; Grades = [60; 70; 80]}
+            {StudentId = 2; StudentName = "Bob"; Grades = [50; 60; 65]}
+        ]
+
+        let stats = calculateClassStatistics students
+        let statsMessage = 
+            $"Average: {stats.Average}%%\nPass Rate: {stats.PassRate}%%\nFail Rate: {stats.FailRate}%%\n" +
+            $"Highest Grade: {stats.HighestGrade}\nLowest Grade: {stats.LowestGrade}"
+
+        MessageBox.Show(statsMessage) |> ignore
+    )
 
     // Admin can see all options; Viewer can only see grades
     if role = Admin then
@@ -176,18 +189,18 @@ let rec createMainForm (role: UserRole) =
             mainForm.Show()
         )
 
-    manageGradesButton.Click.Add(fun _ -> 
-        let childForm: Form = createManageGradesChildForm mainForm
-        mainForm.Hide()
-        childForm.ShowDialog() |> ignore
-        mainForm.Show()
-    )
+        manageGradesButton.Click.Add(fun _ -> 
+            let childForm: Form = createManageGradesChildForm mainForm
+            mainForm.Hide()
+            childForm.ShowDialog() |> ignore
+            mainForm.Show()
+        )
 
     // Add components to the main form
     if role = Admin then
-        mainForm.Controls.AddRange[| manageStudentButton; manageCourseButton; manageGradesButton; searchButton; studentIdInput; studentIdLabel |]
+        mainForm.Controls.AddRange[| manageStudentButton; manageCourseButton; manageGradesButton; searchButton; viewStats; studentIdInput; studentIdLabel |]
     else
-        mainForm.Controls.AddRange[| manageGradesButton; searchButton; studentIdInput; studentIdLabel |]  // Viewer only sees the grades button
+        mainForm.Controls.AddRange[| searchButton; viewStats; studentIdInput; studentIdLabel |]  // Viewer only sees the grades button
     mainForm
 
 // Create the child form for managing students
@@ -322,7 +335,6 @@ and createManageGradesChildForm (mainForm: Form) =
     let editGradeButton = new Button(Text = "Edit Grade", Top = 240, Left = 200, Width = 100)
     let deleteGradeButton = new Button(Text = "Delete Grade", Top = 240, Left = 350, Width = 100)
 
-    let viewStats = new Button(Text = "View Statistics", Top = 400, Left = 50, Width = 100)
 
     backButton.Click.Add(fun _ -> childForm.Close())
 
@@ -361,24 +373,9 @@ and createManageGradesChildForm (mainForm: Form) =
         MessageBox.Show($"Grade with Course ID: {courseId} AND Student ID: {studentId} deleted successfully") |> ignore
     )
 
-    // View class statistics
-    viewStats.Click.Add(fun _ ->
-        let students = [
-            {StudentId = 1; StudentName = "Alice"; Grades = [60; 70; 80]}
-            {StudentId = 2; StudentName = "Bob"; Grades = [50; 60; 65]}
-        ]
-
-        let stats = calculateClassStatistics students
-        let statsMessage = 
-            $"Average: {stats.Average}%%\nPass Rate: {stats.PassRate}%%\nFail Rate: {stats.FailRate}%%\n" +
-            $"Highest Grade: {stats.HighestGrade}\nLowest Grade: {stats.LowestGrade}"
-
-        MessageBox.Show(statsMessage) |> ignore
-    )
 
     childForm.Controls.AddRange[| manageGradesTitle; backButton; studentIdInput; studentIdLabel; courseIdInput; courseIdLabel; gradeInput;
-                                  gradeLabel; addGradeButton; editGradeButton; deleteGradeButton;
-                                  viewStats |]
+                                  gradeLabel; addGradeButton; editGradeButton; deleteGradeButton; |]
     childForm
 
     // Create the login form and role selection form
