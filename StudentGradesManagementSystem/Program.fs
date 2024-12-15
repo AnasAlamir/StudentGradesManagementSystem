@@ -33,13 +33,17 @@ type UserRole =
     | Admin
     | Viewer
 
+// File paths and regex pattern
 let studentRelativePath  = @"..\..\..\data\student.txt"
 let studentFullPath = Path.Combine(Directory.GetCurrentDirectory(), studentRelativePath)
+let courseRelativePath  = @"..\..\..\data\course.txt"
+let courseFullPath = Path.Combine(Directory.GetCurrentDirectory(), courseRelativePath)
 let gradeRelativePath = @"..\..\..\data\grades.txt"
 let gradeFullPath = Path.Combine(Directory.GetCurrentDirectory(), gradeRelativePath)
 
 let pattern = @"ID: (\d+), NAME: (.+)"
 
+// Helper functions to read and write data to file
 let appendLineAutoIdToFile filePath content =
     try
         let lines = if File.Exists(filePath) then File.ReadAllLines(filePath) |> Array.toList else []
@@ -65,9 +69,40 @@ let readFileLines filePath =
     | ex -> Error($"{ex.Message}")
 
 // Add grades for a student
-let addGrade studentId classId grade =
-    let content = $"StudentId: {studentId}, ClassId: {classId}, Grade: {grade}\r\n"
+let addGrade studentId courseId grade =
+    let content = $"StudentId: {studentId}, CourseId: {courseId}, Grade: {grade}\r\n"
     File.AppendAllText(gradeFullPath, content)
+
+
+    
+let searchForGradesWithId studentId =
+    let lines = File.ReadAllLines(gradeFullPath)
+    lines
+    |> Array.toList
+    |> List.filter(fun line -> line.StartsWith($"StudentId: {studentId}"))
+
+let getAvarrageGrades studentId = 
+    searchForGradesWithId studentId
+    |> Seq.choose (fun line ->
+        if line.Contains("Grade: ") then
+            line.Substring(line.IndexOf("Grade: ") + 7).Trim() // Extract grade value
+            |> float |> Some
+        else
+            None)
+    |> Seq.toList
+    |> fun grades ->
+        if grades.IsEmpty then
+            None // No grades found for the student
+        else
+            Some (grades |> List.average) // Calculate the average
+
+let getCourseName courseId = 
+    File.ReadLines(courseFullPath)
+    |> Seq.tryPick (fun line ->
+        if line.StartsWith($"ID: {courseId}, NAME: ") then
+            Some (line.Split(", NAME: ").[1].Trim())
+        else
+            None)
 
 // Calculate statistics (average, pass/fail rate, highest/lowest grade)
 let calculateClassStatistics (students: Student list) =
@@ -85,14 +120,75 @@ let calculateClassStatistics (students: Student list) =
         LowestGrade = lowest
     }
 
+
 // Create main form
 let rec createMainForm (role: UserRole) =
     let mainForm = new Form(Text = "Student Grades Management System", Width = 800, Height = 600)
 
-    let manageStudentButton = new Button(Text = "Manage Student", Top = 200, Left = 50, Width = 200)
-    let manageCourseButton = new Button(Text = "Manage Course", Top = 200, Left = 300, Width = 200)
-    let manageGradesButton = new Button(Text = "Manage Grades", Top = 200, Left = 550, Width = 200)
+    let manageStudentButton = new Button(Text = "Manage Student", Top = 150, Left = 50, Width = 200)
+    let manageCourseButton = new Button(Text = "Manage Course", Top = 150, Left = 300, Width = 200)
+    let manageGradesButton = new Button(Text = "Manage Grades", Top = 150, Left = 550, Width = 200)
 
+    let studentIdInput = new TextBox(Top = 240, Left = 150, Width = 200)
+    let studentIdLabel = new Label(Text = "Student ID:", Top = 240, Left = 50)
+
+    let searchButton = new Button(Text = "Veiw Grades", Top = 240, Left = 400, Width = 200)
+    let viewStats = new Button(Text = "View Statistics", Top = 240, Left = 650, Width = 100)
+    // Output area
+    let outputBox = new TextBox(Top = 300, Left = 50, Width = 300, Height = 200, Multiline = true, ReadOnly = true)
+
+    searchButton.Click.Add (fun _ ->
+        let studentData = 
+            let studentId = studentIdInput.Text
+            searchForGradesWithId studentId 
+            |> List.map (fun line ->
+                let patternCourseId = @"CourseId: (\d+), Grade: (\d+)"
+                let grade = Regex.Match(line, patternCourseId).Groups.[2].Value
+                let courseId = Regex.Match(line, patternCourseId).Groups.[1].Value
+                let courseName = 
+                    match getCourseName courseId with 
+                    | Some(value) -> value
+                    | none -> ""
+                sprintf "student with id %s has in %s : %s" studentId courseName grade)
+            |> String.concat "\r\n"
+        let avg = 
+            match getAvarrageGrades studentIdInput.Text with 
+            | Some(value) -> value
+            | none -> 0.0
+        let outputData =  sprintf "%s\r\nstudent Averages =%f"studentData avg
+        outputBox.Text <- outputData
+        mainForm.Controls.Add(outputBox)
+    )
+    viewStats.Click.Add(fun _ ->
+        let lines = File.ReadAllLines(gradeFullPath)
+        let studentsGrades = 
+            lines
+            |> Array.toList
+            |> List.map (fun line ->
+                let pattern = @"StudentId: (\d+), CourseId: (\d+), Grade: (\d+)"
+                let matched = Regex.Match(line, pattern)
+                let studentId = int matched.Groups.[1].Value
+                let grade = int matched.Groups.[3].Value
+                studentId, grade)
+            |> List.groupBy fst
+            |> List.map (fun (studentId, grades) ->
+                let studentName = 
+                    File.ReadLines(studentFullPath)
+                    |> Seq.tryPick (fun line ->
+                        if line.StartsWith($"ID: {studentId}, NAME: ") then
+                            Some (line.Split(", NAME: ").[1].Trim())
+                        else
+                            None)
+                    |> Option.defaultValue "Unknown"
+                { StudentId = studentId; StudentName = studentName; Grades = grades |> List.map snd })
+
+        let stats = calculateClassStatistics studentsGrades
+        let statsMessage = 
+            $"Average: {stats.Average}%%\nPass Rate: {stats.PassRate}%%\nFail Rate: {stats.FailRate}%%\n" +
+            $"Highest Grade: {stats.HighestGrade}\nLowest Grade: {stats.LowestGrade}"
+
+        MessageBox.Show(statsMessage) |> ignore
+    )
     // Admin can see all options; Viewer can only see grades
     if role = Admin then
         manageStudentButton.Click.Add(fun _ -> 
@@ -109,18 +205,18 @@ let rec createMainForm (role: UserRole) =
             mainForm.Show()
         )
 
-    manageGradesButton.Click.Add(fun _ -> 
-        let childForm: Form = createManageGradesChildForm mainForm
-        mainForm.Hide()
-        childForm.ShowDialog() |> ignore
-        mainForm.Show()
-    )
+        manageGradesButton.Click.Add(fun _ -> 
+            let childForm: Form = createManageGradesChildForm mainForm
+            mainForm.Hide()
+            childForm.ShowDialog() |> ignore
+            mainForm.Show()
+        )
 
     // Add components to the main form
     if role = Admin then
-        mainForm.Controls.AddRange[| manageStudentButton; manageCourseButton; manageGradesButton |]
+        mainForm.Controls.AddRange[| manageStudentButton; manageCourseButton; manageGradesButton; searchButton; viewStats; studentIdInput; studentIdLabel |]
     else
-        mainForm.Controls.AddRange[| manageGradesButton |]  // Viewer only sees the grades button
+        mainForm.Controls.AddRange[| searchButton; viewStats; studentIdInput; studentIdLabel |]  // Viewer only sees the grades button
     mainForm
 
 // Create the child form for managing students
@@ -176,7 +272,7 @@ and createManageStudentChildForm (mainForm: Form) =
         MessageBox.Show($"Student with ID: {studentId} deleted successfully") |> ignore
     )
 
-    childForm.Controls.AddRange[| backButton; studentNameLabel; studentNameInput; studentIdLabel; studentIdInput; 
+    childForm.Controls.AddRange[| manageStudentTitle; backButton; studentNameLabel; studentNameInput; studentIdLabel; studentIdInput; 
                                   addStudentButton; editStudentButton; deleteStudentButton |]
     childForm
 
@@ -185,9 +281,54 @@ and createManageCourseChildForm (mainForm: Form) =
     let childForm = new Form(Text = "Manage Course", Width = 800, Height = 600)
     let backButton = new Button(Text = "Back to Main Form", Top = 50, Left = 50, Width = 200)
     let manageCourseTitle = new Label(Text = "Manage Course", Top = 10 , Left = 300, Width = 500)
+
+    let courseNameInput = new TextBox(Top = 100, Left = 150, Width = 200)
+    let courseIdInput = new TextBox(Top = 140, Left = 150, Width = 200)
+    let courseNameLabel = new Label(Text = "Course Name:", Top = 100, Left = 50)
+    let courseIdLabel = new Label(Text = "Course ID:", Top = 140, Left = 50)
+
+    let addCourseButton = new Button(Text = "Add New Course", Top = 200, Left = 50, Width = 100)
+    let editCourseButton = new Button(Text = "Edit Course", Top = 200, Left = 200, Width = 100)
+    let deleteCourseButton = new Button(Text = "Delete Course", Top = 200, Left = 350, Width = 100)
     
     backButton.Click.Add(fun _ -> childForm.Close())
-    childForm.Controls.AddRange[| manageCourseTitle; backButton |]
+
+     // Add new course functionality
+    addCourseButton.Click.Add(fun _ ->
+        let studentName = courseNameInput.Text
+        match appendLineAutoIdToFile courseFullPath studentName with
+        | Ok msg -> MessageBox.Show($"Success: {msg}") |> ignore
+        | Error err -> MessageBox.Show($"Error: {err}") |> ignore
+    )
+
+    // Edit course functionality
+    editCourseButton.Click.Add(fun _ ->
+        let courseName = courseNameInput.Text
+        let courseId = int courseIdInput.Text
+        let lines = File.ReadAllLines(courseFullPath) |> Array.toList
+        let updatedLines = 
+            lines 
+            |> List.map (fun line ->
+                if line.StartsWith($"ID: {courseId}") then
+                    $"ID: {courseId}, NAME: {courseName}"
+                else line)
+        File.WriteAllLines(courseFullPath, updatedLines |> Array.ofList)
+        MessageBox.Show($"Course with ID: {courseId} updated successfully") |> ignore
+    )
+
+    // Delete course functionality
+    deleteCourseButton.Click.Add(fun _ ->
+        let courseId = int courseIdInput.Text
+        let lines = File.ReadAllLines(courseFullPath) |> Array.toList
+        let updatedLines = 
+            lines 
+            |> List.filter (fun line -> not (line.StartsWith($"ID: {courseId}")))
+        File.WriteAllLines(courseFullPath, updatedLines |> Array.ofList)
+        MessageBox.Show($"Course with ID: {courseId} deleted successfully") |> ignore
+    )
+
+    childForm.Controls.AddRange[| manageCourseTitle; backButton; courseNameInput; courseIdInput; courseNameLabel; courseIdLabel
+                                  addCourseButton; editCourseButton; deleteCourseButton|]
     childForm
 
 // Create child form for managing grades and viewing statistics
@@ -196,32 +337,101 @@ and createManageGradesChildForm (mainForm: Form) =
 
     let backButton = new Button(Text = "Back to Main Form", Top = 50, Left = 50, Width = 200)
     let manageGradesTitle = new Label(Text = "Manage Grades", Top = 10 , Left = 300, Width = 500)
-    let viewStats = new Button(Text = "View Statistics", Top = 200, Left = 50, Width = 100)
+
+    let studentIdInput = new TextBox(Top = 100, Left = 150, Width = 200)
+    let studentIdLabel = new Label(Text = "Student ID:", Top = 100, Left = 50)
+
+    let courseIdInput = new TextBox(Top = 140, Left = 150, Width = 200)
+    let courseIdLabel = new Label(Text = "Course ID:", Top = 140, Left = 50)
+
+    let gradeInput = new TextBox(Top = 180, Left = 150, Width = 200)
+    let gradeLabel = new Label(Text = " Grade:", Top = 180, Left = 50)
+
+    let addGradeButton = new Button(Text = "Add New Grade", Top = 240, Left = 50, Width = 100)
+    let editGradeButton = new Button(Text = "Edit Grade", Top = 240, Left = 200, Width = 100)
+    let deleteGradeButton = new Button(Text = "Delete Grade", Top = 240, Left = 350, Width = 100)
+
 
     backButton.Click.Add(fun _ -> childForm.Close())
 
-    // View class statistics
-    viewStats.Click.Add(fun _ ->
-        let students = [
-            {StudentId = 1; StudentName = "Alice"; Grades = [60; 70; 80]}
-            {StudentId = 2; StudentName = "Bob"; Grades = [50; 60; 65]}
-        ]
-
-        let stats = calculateClassStatistics students
-        let statsMessage = 
-            $"Average: {stats.Average}%%\nPass Rate: {stats.PassRate}%%\nFail Rate: {stats.FailRate}%%\n" +
-            $"Highest Grade: {stats.HighestGrade}\nLowest Grade: {stats.LowestGrade}"
-
-        MessageBox.Show(statsMessage) |> ignore
+    // Add new course functionality
+    addGradeButton.Click.Add(fun _ ->
+        let studentId = int studentIdInput.Text
+        let courseId = int courseIdInput.Text
+        let grade = int gradeInput.Text
+        addGrade studentId courseId grade
+    )
+    // Edit course functionality
+    editGradeButton.Click.Add(fun _ ->
+        let studentId = int studentIdInput.Text
+        let courseId = int courseIdInput.Text
+        let grade = int gradeInput.Text
+        let lines = File.ReadAllLines(gradeFullPath) |> Array.toList
+        let updatedLines = 
+            lines 
+            |> List.map (fun line ->
+                if line.StartsWith($"StudentId: {studentId}, ClassId: {courseId}") then
+                    $"StudentId: {studentId}, ClassId: {courseId}, Grade: {grade}"
+                else line)
+        File.WriteAllLines(gradeFullPath, updatedLines |> Array.ofList)
+        MessageBox.Show($"Grade with Course ID: {courseId} AND Student ID: {studentId} updated successfully") |> ignore 
     )
 
-    childForm.Controls.AddRange[| manageGradesTitle; backButton; viewStats |]
+    // Delete course functionality
+    deleteGradeButton.Click.Add(fun _ ->
+        let studentId = int studentIdInput.Text
+        let courseId = int courseIdInput.Text
+        let lines = File.ReadAllLines(gradeFullPath) |> Array.toList
+        let updatedLines = 
+            lines 
+            |> List.filter (fun line -> not (line.StartsWith($"StudentId: {studentId}, CourseId: {courseId}")))
+        File.WriteAllLines(gradeFullPath, updatedLines |> Array.ofList)
+        MessageBox.Show($"Grade with Course ID: {courseId} AND Student ID: {studentId} deleted successfully") |> ignore
+    )
+
+
+    childForm.Controls.AddRange[| manageGradesTitle; backButton; studentIdInput; studentIdLabel; courseIdInput; courseIdLabel; gradeInput;
+                                  gradeLabel; addGradeButton; editGradeButton; deleteGradeButton; |]
     childForm
 
+    // Create the login form and role selection form
+let createLoginForm() =
+    let loginForm = new Form(Text = "Login", Width = 800, Height = 600)
+
+    // Username and Password Labels and Textboxes
+    let usernameLabel = new Label(Text = "Username:", Top = 50, Left = 50)
+    let passwordLabel = new Label(Text = "Password:", Top = 90, Left = 50)
+    let usernameInput = new TextBox(Top = 50, Left = 150, Width = 150)
+    let passwordInput = new TextBox(Top = 90, Left = 150, Width = 150, PasswordChar = '*')
+
+    // Buttons
+    let loginButton = new Button(Text = "Login", Top = 150, Left = 120, Width = 100)
+
+    // Login validation and form switching
+    loginButton.Click.Add(fun _ -> 
+        match usernameInput.Text, passwordInput.Text with
+        | "admin", "password" -> 
+            MessageBox.Show("Login successful, Welcome Admin!") |> ignore
+            loginForm.Hide() // Hide the login form
+            let mainForm = createMainForm Admin // Create Admin main form
+            mainForm.ShowDialog() |> ignore // Show main form for Admin
+            loginForm.Close() // Close the login form after the main form is closed
+        | "viewer", "password" -> 
+            MessageBox.Show("Login successful, Welcome Viewer!") |> ignore
+            loginForm.Hide() // Hide the login form
+            let mainForm = createMainForm Viewer // Create Viewer main form
+            mainForm.ShowDialog() |> ignore // Show main form for Viewer
+            loginForm.Close() // Close the login form after the main form is closed
+        | _ -> 
+            MessageBox.Show("Invalid credentials, try again!") |> ignore
+    )
+
+    loginForm.Controls.AddRange[| usernameLabel; passwordLabel; usernameInput; passwordInput; loginButton |]
+    loginForm
 
 // Run the application
 [<STAThread>]
 do
-    let userRole = Admin // or Viewer
-    let mainForm = createMainForm userRole
-    Application.Run(mainForm)
+do
+    let loginForm = createLoginForm()
+    Application.Run(loginForm)
