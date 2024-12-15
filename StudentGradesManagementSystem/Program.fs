@@ -160,19 +160,35 @@ let rec createMainForm (role: UserRole) =
         mainForm.Controls.Add(outputBox)
     )
     viewStats.Click.Add(fun _ ->
-        let students = [
-            {StudentId = 1; StudentName = "Alice"; Grades = [60; 70; 80]}
-            {StudentId = 2; StudentName = "Bob"; Grades = [50; 60; 65]}
-        ]
+        let lines = File.ReadAllLines(gradeFullPath)
+        let studentsGrades = 
+            lines
+            |> Array.toList
+            |> List.map (fun line ->
+                let pattern = @"StudentId: (\d+), CourseId: (\d+), Grade: (\d+)"
+                let matched = Regex.Match(line, pattern)
+                let studentId = int matched.Groups.[1].Value
+                let grade = int matched.Groups.[3].Value
+                studentId, grade)
+            |> List.groupBy fst
+            |> List.map (fun (studentId, grades) ->
+                let studentName = 
+                    File.ReadLines(studentFullPath)
+                    |> Seq.tryPick (fun line ->
+                        if line.StartsWith($"ID: {studentId}, NAME: ") then
+                            Some (line.Split(", NAME: ").[1].Trim())
+                        else
+                            None)
+                    |> Option.defaultValue "Unknown"
+                { StudentId = studentId; StudentName = studentName; Grades = grades |> List.map snd })
 
-        let stats = calculateClassStatistics students
+        let stats = calculateClassStatistics studentsGrades
         let statsMessage = 
             $"Average: {stats.Average}%%\nPass Rate: {stats.PassRate}%%\nFail Rate: {stats.FailRate}%%\n" +
             $"Highest Grade: {stats.HighestGrade}\nLowest Grade: {stats.LowestGrade}"
 
         MessageBox.Show(statsMessage) |> ignore
     )
-
     // Admin can see all options; Viewer can only see grades
     if role = Admin then
         manageStudentButton.Click.Add(fun _ -> 
