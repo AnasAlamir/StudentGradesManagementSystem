@@ -122,7 +122,7 @@ let calculateClassStatistics (students: Student list) =
 
 
 // Create main form
-let rec createMainForm (role: UserRole) =
+let rec createMainForm (role: UserRole) : Form =
     let mainForm = new Form(Text = "Student Grades Management System", Width = 800, Height = 600)
 
     let manageStudentButton = new Button(Text = "Manage Student", Top = 150, Left = 50, Width = 200)
@@ -132,92 +132,106 @@ let rec createMainForm (role: UserRole) =
     let studentIdInput = new TextBox(Top = 240, Left = 150, Width = 200)
     let studentIdLabel = new Label(Text = "Student ID:", Top = 240, Left = 50)
 
-    let searchButton = new Button(Text = "Veiw Grades", Top = 240, Left = 400, Width = 200)
+    let searchButton = new Button(Text = "View Grades", Top = 240, Left = 400, Width = 200)
     let viewStats = new Button(Text = "View Statistics", Top = 240, Left = 650, Width = 100)
+
     // Output area
     let outputBox = new TextBox(Top = 300, Left = 50, Width = 300, Height = 200, Multiline = true, ReadOnly = true)
 
-    searchButton.Click.Add (fun _ ->
+    // Logout Button
+    let logoutButton = new Button(Text = "Logout", Top = 500, Left = 650, Width = 100)
+    logoutButton.Anchor <- AnchorStyles.Bottom ||| AnchorStyles.Right
+
+
+    searchButton.Click.Add (fun _ -> 
         let studentData = 
             let studentId = studentIdInput.Text
             searchForGradesWithId studentId 
-            |> List.map (fun line ->
+            |> List.map (fun line -> 
                 let patternCourseId = @"CourseId: (\d+), Grade: (\d+)"
                 let grade = Regex.Match(line, patternCourseId).Groups.[2].Value
                 let courseId = Regex.Match(line, patternCourseId).Groups.[1].Value
                 let courseName = 
                     match getCourseName courseId with 
                     | Some(value) -> value
-                    | none -> ""
-                sprintf "student with id %s has in %s : %s" studentId courseName grade)
+                    | None -> ""
+                sprintf "Student with ID %s has in %s : %s" studentId courseName grade)
             |> String.concat "\r\n"
+        
         let avg = 
             match getAvarrageGrades studentIdInput.Text with 
             | Some(value) -> value
-            | none -> 0.0
-        let outputData =  sprintf "%s\r\nstudent Averages =%f"studentData avg
+            | None -> 0.0
+        
+        let outputData = sprintf "%s\r\nStudent Averages = %f" studentData avg
         outputBox.Text <- outputData
-        mainForm.Controls.Add(outputBox)
     )
-    viewStats.Click.Add(fun _ ->
+
+    viewStats.Click.Add(fun _ -> 
         let lines = File.ReadAllLines(gradeFullPath)
         let studentsGrades = 
             lines
             |> Array.toList
-            |> List.map (fun line ->
+            |> List.map (fun line -> 
                 let pattern = @"StudentId: (\d+), CourseId: (\d+), Grade: (\d+)"
                 let matched = Regex.Match(line, pattern)
                 let studentId = int matched.Groups.[1].Value
                 let grade = int matched.Groups.[3].Value
                 studentId, grade)
             |> List.groupBy fst
-            |> List.map (fun (studentId, grades) ->
+            |> List.map (fun (studentId, grades) -> 
                 let studentName = 
                     File.ReadLines(studentFullPath)
-                    |> Seq.tryPick (fun line ->
-                        if line.StartsWith($"ID: {studentId}, NAME: ") then
-                            Some (line.Split(", NAME: ").[1].Trim())
-                        else
-                            None)
+                    |> Seq.tryPick (fun line -> 
+                        if line.StartsWith($"ID: {studentId}, NAME: ") then 
+                            Some(line.Split(", NAME: ").[1].Trim()) 
+                        else None)
                     |> Option.defaultValue "Unknown"
                 { StudentId = studentId; StudentName = studentName; Grades = grades |> List.map snd })
-
+        
         let stats = calculateClassStatistics studentsGrades
         let statsMessage = 
-            $"Average: {stats.Average}%%\nPass Rate: {stats.PassRate}%%\nFail Rate: {stats.FailRate}%%\n" +
+            $"Average: {stats.Average}%%\nPass Rate: {stats.PassRate}%%\nFail Rate: {stats.FailRate}%%\n" + 
             $"Highest Grade: {stats.HighestGrade}\nLowest Grade: {stats.LowestGrade}"
 
         MessageBox.Show(statsMessage) |> ignore
     )
-    // Admin can see all options; Viewer can only see grades
+    logoutButton.Click.Add(fun _ -> 
+            let (loginForm: Form) = createLoginForm()
+            mainForm.Hide()
+            loginForm.ShowDialog() |> ignore
+            mainForm.Close()
+        )
+    // Admin role buttons for managing students, courses, and grades
     if role = Admin then
         manageStudentButton.Click.Add(fun _ -> 
-            let childForm: Form = createManageStudentChildForm mainForm
+            let (childForm: Form) = createManageStudentChildForm mainForm
             mainForm.Hide()
             childForm.ShowDialog() |> ignore
             mainForm.Show()
         )
-
         manageCourseButton.Click.Add(fun _ -> 
-            let childForm: Form = createManageCourseChildForm mainForm
+            let (childForm: Form) = createManageCourseChildForm mainForm
             mainForm.Hide()
             childForm.ShowDialog() |> ignore
             mainForm.Show()
         )
-
         manageGradesButton.Click.Add(fun _ -> 
-            let childForm: Form = createManageGradesChildForm mainForm
+            let (childForm: Form) = createManageGradesChildForm mainForm
             mainForm.Hide()
             childForm.ShowDialog() |> ignore
             mainForm.Show()
         )
-
-    // Add components to the main form
+    // Add components to the main form based on role
     if role = Admin then
         mainForm.Controls.AddRange[| manageStudentButton; manageCourseButton; manageGradesButton; searchButton; viewStats; studentIdInput; studentIdLabel |]
     else
-        mainForm.Controls.AddRange[| searchButton; viewStats; studentIdInput; studentIdLabel |]  // Viewer only sees the grades button
+        mainForm.Controls.AddRange[| searchButton; viewStats; studentIdInput; studentIdLabel |] // Viewer only sees the grades button
+
+    mainForm.Controls.Add(logoutButton) // Add logout button
+
     mainForm
+
 
 // Create the child form for managing students
 and createManageStudentChildForm (mainForm: Form) =
@@ -234,6 +248,7 @@ and createManageStudentChildForm (mainForm: Form) =
     let addStudentButton = new Button(Text = "Add New Student", Top = 200, Left = 50, Width = 100)
     let editStudentButton = new Button(Text = "Edit Student", Top = 200, Left = 200, Width = 100)
     let deleteStudentButton = new Button(Text = "Delete Student", Top = 200, Left = 350, Width = 100)
+    let LogoutButton = new Button(Text = "Logout", Top = 500, Left = 350, Width = 100)
 
     // Event to go back to the main form
     backButton.Click.Add(fun _ -> childForm.Close())
@@ -395,7 +410,7 @@ and createManageGradesChildForm (mainForm: Form) =
     childForm
 
     // Create the login form and role selection form
-let createLoginForm() =
+and createLoginForm() : Form =
     let loginForm = new Form(Text = "Login", Width = 800, Height = 600)
 
     // Username and Password Labels and Textboxes
@@ -413,14 +428,20 @@ let createLoginForm() =
         | "admin", "password" -> 
             MessageBox.Show("Login successful, Welcome Admin!") |> ignore
             loginForm.Hide() // Hide the login form
-            let mainForm = createMainForm Admin // Create Admin main form
-            mainForm.ShowDialog() |> ignore // Show main form for Admin
+
+            // Create the main form for Admin and show it
+            let mainForm = createMainForm Admin //admin login
+            mainForm.ShowDialog() |> ignore
+
             loginForm.Close() // Close the login form after the main form is closed
         | "viewer", "password" -> 
             MessageBox.Show("Login successful, Welcome Viewer!") |> ignore
             loginForm.Hide() // Hide the login form
-            let mainForm = createMainForm Viewer // Create Viewer main form
-            mainForm.ShowDialog() |> ignore // Show main form for Viewer
+
+            // Create the main form for Viewer and show it
+            let mainForm = createMainForm Viewer // This line is placed here for viewer login
+            mainForm.ShowDialog() |> ignore
+
             loginForm.Close() // Close the login form after the main form is closed
         | _ -> 
             MessageBox.Show("Invalid credentials, try again!") |> ignore
@@ -429,9 +450,11 @@ let createLoginForm() =
     loginForm.Controls.AddRange[| usernameLabel; passwordLabel; usernameInput; passwordInput; loginButton |]
     loginForm
 
+
+
+
 // Run the application
 [<STAThread>]
-do
 do
     let loginForm = createLoginForm()
     Application.Run(loginForm)
