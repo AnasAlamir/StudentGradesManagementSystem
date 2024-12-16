@@ -103,7 +103,6 @@ let getCourseName courseId =
             Some (line.Split(", NAME: ").[1].Trim())
         else
             None)
-
 // Calculate statistics (average, pass/fail rate, highest/lowest grade)
 let calculateClassStatistics (students: Student list) =
     let allGrades = students |> List.collect (fun s -> s.Grades)
@@ -143,29 +142,33 @@ let rec createMainForm (role: UserRole) : Form =
     logoutButton.Anchor <- AnchorStyles.Bottom ||| AnchorStyles.Right
 
 
-    searchButton.Click.Add (fun _ -> 
+    
+    // Output area
+    let outputBox = new TextBox(Top = 300, Left = 50, Width = 300, Height = 200, Multiline = true, ReadOnly = true)
+
+    searchButton.Click.Add (fun _ ->
         let studentData = 
             let studentId = studentIdInput.Text
             searchForGradesWithId studentId 
-            |> List.map (fun line -> 
+            |> List.map (fun line ->
                 let patternCourseId = @"CourseId: (\d+), Grade: (\d+)"
                 let grade = Regex.Match(line, patternCourseId).Groups.[2].Value
                 let courseId = Regex.Match(line, patternCourseId).Groups.[1].Value
                 let courseName = 
                     match getCourseName courseId with 
                     | Some(value) -> value
-                    | None -> ""
-                sprintf "Student with ID %s has in %s : %s" studentId courseName grade)
+                    | none -> ""
+                sprintf "student with id %s has in %s : %s" studentId courseName grade)
             |> String.concat "\r\n"
-        
         let avg = 
             match getAvarrageGrades studentIdInput.Text with 
             | Some(value) -> value
-            | None -> 0.0
-        
-        let outputData = sprintf "%s\r\nStudent Averages = %f" studentData avg
+            | none -> 0.0
+        let outputData =  sprintf "%s\r\nstudent Averages =%f"studentData avg
         outputBox.Text <- outputData
+        mainForm.Controls.Add(outputBox)
     )
+
 
     viewStats.Click.Add(fun _ -> 
         let lines = File.ReadAllLines(gradeFullPath)
